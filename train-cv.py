@@ -18,6 +18,8 @@ from data.loader import DataLoader
 from model.rnn import RelationModel
 from utils import scorer, constant, helper
 from utils.vocab import Vocab
+import json
+import math
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_dir', type=str, default='dataset/tacred')
@@ -82,8 +84,6 @@ assert emb_matrix.shape[1] == opt['emb_dim']
 # load data
 print("Loading data from {} with batch size {}...".format(opt['data_dir'], opt['batch_size']))
 train_batch = DataLoader(opt['data_dir'] + '/train.json', opt['batch_size'], opt, vocab, evaluation=False)
-dev_batch = DataLoader(opt['data_dir'] + '/dev.json', opt['batch_size'], opt, vocab, evaluation=True)
-test_batch = DataLoader(opt['data_dir'] + '/test.json', opt['batch_size'], opt, vocab, evaluation=True)
 
 model_id = opt['id'] if len(opt['id']) > 1 else '0' + opt['id']
 model_save_dir = opt['save_dir'] + '/' + model_id
@@ -105,7 +105,25 @@ global_start_time = time.time()
 format_str = '{}: step {}/{} (epoch {}/{}), loss = {:.6f} ({:.3f} sec/batch), lr: {:.6f}'
 max_steps = len(train_batch) * opt['num_epoch']
 
-for runid in range(1,6):
+def split_test_set(ratio=0.1):
+	# split dev set
+	with open(opt['data_dir'] + '/test.json', 'r') as f:
+		test_instances = json.load(f)
+	test_size = len(test_instances)
+	indices = list(range(test_size))
+	random.shuffle(indices)
+	dev_size = math.ceil(test_size*ratio)
+	dev_instances = [test_instances[i] for i in indices[:dev_size]]
+	test_instances = [test_instances[i] for i in indices[dev_size:]]
+	with open(opt['data_dir'] + '/dev_split.json', 'w') as f:
+		json.dump(dev_instances, f)
+	with open(opt['data_dir'] + '/test_split.json', 'w') as f:
+		json.dump(test_instances, f)
+
+for runid in range(1, 6):
+	split_test_set()
+	dev_batch = DataLoader(opt['data_dir'] + '/dev_split.json', opt['batch_size'], opt, vocab, evaluation=True)
+	test_batch = DataLoader(opt['data_dir'] + '/test_split.json', opt['batch_size'], opt, vocab, evaluation=True)
 	dev_f1_history = []
 	current_lr = opt['lr']
 	print('Run model {} times'.format(runid))
